@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+sentence-transformers
+faiss-cpu
+redis
+prometheus-fastapi-instrumentator
+numpy
+pydantic
+python-dotenv
+requests
+apache-airflow

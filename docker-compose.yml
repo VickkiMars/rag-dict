@@ -1,0 +1,72 @@
+version: "3.8"
+services:
+
+  redis:
+    image: redis:7-alpine
+    container_name: rag_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data
+    restart: unless-stopped
+
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile.fastapi
+    image: rag_fastapi:latest
+    container_name: rag_fastapi
+    depends_on:
+      - redis
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - FAISS_PATH=/app/data/embeddings.faiss
+      - EMB_ARRAY_PATH=/app/data/embeddings.npy
+      - METADATA_PATH=/app/data/metadata.json
+    restart: unless-stopped
+
+  airflow:
+    image: apache/airflow:2.9.3
+    container_name: rag_airflow
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+      - _PIP_ADDITIONAL_REQUIREMENTS=sentence-transformers==2.2.2,faiss-cpu==1.7.4,redis==4.6.0,numpy==1.26.3
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./data:/data
+      - ./src:/opt/airflow/src
+    ports:
+      - "8080:8080"
+    command: >
+      bash -c "airflow db upgrade &&
+               airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin ||
+               true &&
+               airflow scheduler & airflow webserver"
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: rag_prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana-oss:10.0.2
+    container_name: rag_grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
