@@ -2,53 +2,99 @@ import faiss
 import numpy as np
 from typing import List, Tuple
 import os
-from src.config import FAISS_PATH, FAISS_INDEX_DIM
-from rank_bm25 import BM250kapi
+import json
+from src.config import FAISS_PATH, DICT_JSON, TOP_K
+from src.embeddings import embed_texts
+from rank_bm25 import BM25Okapi
 
+
+# -----------------------------
+# 1. BUILD FAISS INDEX
+# -----------------------------
 def build_faiss_index(embeddings: np.ndarray) -> faiss.Index:
-    dim = embeddings.shape[1]
-    index = faiss.IndexFlatIP(dim)
-    faiss.normalize_L2(embeddings)
-    index.add(embeddings)
+    """
+    Builds a FAISS index for fast similarity search.
+
+    Args:
+        embeddings (np.ndarray): 2D array of text embeddings.
+
+    Returns:
+        faiss.Index: A FAISS index ready for searching.
+    """
+    dim = embeddings.shape[1]                   # get vector dimensionality
+    index = faiss.IndexFlatIP(dim)              # create index using inner product (cosine similarity)
+    faiss.normalize_L2(embeddings)              # normalize all embedding vectors to unit length
+    index.add(embeddings)                       # store all vectors in the index
     return index
 
+# -----------------------------
+# 2. SAVE FAISS INDEX
+# -----------------------------
 def save_faiss(index: faiss.Index, path: str = FAISS_PATH):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    faiss.write_index(index, path)
+    """
+    Saves a FAISS index to disk.
 
+    Args:
+        index (faiss.Index): The FAISS index to save.
+        path (str): File path for saving the index.
+    """
+    os.makedirs(os.path.dirname(path), exist_ok=True)  # ensure directory exists
+    faiss.write_index(index, path)                     # serialize and save index to file
+
+# -----------------------------
+# 3. LOAD FAISS INDEX
+# -----------------------------
 def load_faiss(path: str = FAISS_PATH) -> faiss.Index:
+    """
+    Loads a saved FAISS index from disk.
+    """
     if not os.path.exists(path):
         raise FileNotFoundError(f"FAISS index not found at {path}")
-        return none
     index = faiss.read_index(path)
     return index
 
-def prepare_data_and_index(model_name: str) -> Tuple[faiss.Index, dict]:
+# -----------------------------
+# 4. PREPARE DATA AND BUILD INDEX
+# -----------------------------
+def prepare_data_and_index(model_name: str) -> Tuple[faiss.Index, list]:
+    """
+    Loads dictionary data, embeds meanings, builds FAISS index, and saves it.
+    """
     with open(DICT_JSON, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    meanings = [entry["meaning"] for entry in data]
-    embeddings = embed_texts(meanings, model_name=model_name)
-    index - build_faiss_index(embeddings)
-    save_faiss(index)
+    meanings = [entry["meaning"] for entry in data]            # extract all meanings
+    embeddings = embed_texts(meanings, model_name=model_name)  # embed all meanings
+    index = build_faiss_index(embeddings)                      # build FAISS index
+    save_faiss(index)                                          # save for reuse
     return index, data
 
-def rerank_bm25(query:str, docs: List[str]) -> List[str]:
-    bm25 = BM250kapi([d.split() for d in docs])
-    scores = bm25.get_scores(query.split())
+# -----------------------------
+# 5. BM25 RERANKER
+# -----------------------------
+def rerank_bm25(query: str, docs: List[str]) -> List[str]:
+    """
+    Uses BM25 to re-rank semantic results based on lexical similarity.
+
+    Args:
+        query (str): The user query.
+        docs (List[str]): Candidate document texts.
+
+    Returns:
+        List[str]: Re-ranked documents sorted by BM25 score.
+    """
+    tokenized_docs = [d.split() for d in docs]            # tokenize documents
+    bm25 = BM25Okapi(tokenized_docs)                      # initialize BM25 with tokenized corpus
+    scores = bm25.get_scores(query.split())               # score each doc by lexical overlap
     ranked = sorted(zip(docs, scores), key=lambda x: x[1], reverse=True)
     return [doc for doc, _ in ranked]
 
+# -----------------------------
+# 6. SEARCH INDEX
+# -----------------------------
 def search_index(index: faiss.Index, query_emb: np.ndarray, top_k: int = 5) -> Tuple[np.ndarray, np.ndarray]:
-    """_summary_
-
-    Args:
-        index (faiss.Index): _description_
-        query_emb (np.ndarray): shape (d,) or (1,d)
-        top_k (int, optional): _description_. Defaults to 5.
-
-    Returns:
-        Tuple[np.ndarray, np.ndarray]: (scores, indices)
+    """
+    Performs FAISS similarity search.
     """
     if query_emb.ndim == 1:
         query_emb = query_emb.reshape(1, -1)
@@ -57,14 +103,23 @@ def search_index(index: faiss.Index, query_emb: np.ndarray, top_k: int = 5) -> T
     return scores[0], inds[0]
 
 
+# -----------------------------
+# 7. SEARCH MEANING
+# -----------------------------
 def search_meaning(query: str, index, data, model_name: str, top_k: int = TOP_K):
-    query_emb = embed_texts([query], model_name=model_name)
-    scores, inds = search_index(index, query_emb[0], top_k)   # <- call here!
+    """
+    Given a query, retrieves top-k similar meanings from FAISS and dictionary.
+    """
+    query_emb = embed_texts([query], model_name=model_name)      # embed the query
+    scores, inds = search_index(index, query_emb[0], top_k)      # retrieve top-k matches
 
     results = []
     for score, idx in zip(scores, inds):
         word = data[idx]["word"]
         meaning = data[idx]["meaning"]
-        results.append({"word": word, "meaning": meaning, "score": float(score)})
-
+        results.append({
+            "word": word,
+            "meaning": meaning,
+            "score": float(score)
+        })
     return results

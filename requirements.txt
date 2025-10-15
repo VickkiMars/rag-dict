@@ -9,3 +9,4 @@ pydantic
 python-dotenv
 requests
 apache-airflow
+marisa-trie

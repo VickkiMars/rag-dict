@@ -7,10 +7,10 @@ _model = None
 def get_model(model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
     global _model
     if _model is None:
-        _model = SentenceTransformer(name)
+        _model = SentenceTransformer(model_name)
     return _model
 
-def embed_texts(texts: List[str], model_name: str):
+def embed_texts(texts: List[str], model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
     model = get_model(model_name)
     embs = model.encode(
         texts,
