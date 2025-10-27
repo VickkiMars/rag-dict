@@ -2,15 +2,26 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install dependencies
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source
+# Copy source code and data
 COPY src /app/src
 COPY data /app/data
 
+# Copy static assets (for HTML, CSS, JS, images)
+COPY static /app/static
+
+# Ensure directories exist and permissions are okay
+RUN mkdir -p /app/data /app/static && chmod -R 755 /app
+
+# Expose FastAPI default port
 EXPOSE 8000
 
+# Environment setup
 ENV PYTHONPATH=/app/src
+ENV STATIC_DIR=/app/static
 
+# Start FastAPI app
 CMD ["uvicorn", "src.serve:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

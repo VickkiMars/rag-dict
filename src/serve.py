@@ -2,28 +2,46 @@
 
 from fastapi import FastAPI, Query
 from src.cache import kv_get, kv_set, json_get, json_set
-from src.embeddings import embed_texts
-from src.vector_store import load_faiss_index, search_index
+from src.embeddings import embed_texts, get_model
+from src.vector_store import load_faiss, search_index, prepare_data_and_index
 from src.reranker import bm25_rerank
 from src.config import (
     DICT_JSON, FAISS_PATH, EMBEDDING_MODEL, TOP_K, REDIS_PREFIX
 )
 from prometheus_fastapi_instrumentator import Instrumentator
 import json
-import numpy as np
+from src.dict_trie import load_trie, prefix_search, build_trie_from_json
 import os
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
+
+static_dir = Path(__file__).resolve().parent / "frontend"
 
 # Initialize FastAPI
 app = FastAPI(title="RAG Dictionary API", version="1.0")
-
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 # --- Load Data and FAISS Index ---
+trie = None
 with open(DICT_JSON, "r", encoding="utf-8") as f:
     dictionary_data = json.load(f)
-
-faiss_index = load_faiss_index(FAISS_PATH)
+faiss_index = None
+model = None
 
 # --- Metrics Setup ---
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")
+
+@app.on_event("startup")
+def startup_event():
+    global trie, faiss_index, model
+    model = get_model(EMBEDDING_MODEL)
+    if not os.path.exists("data/dictionary.trie"):
+        trie = build_trie_from_json(DICT_JSON)
+    trie = load_trie("data/dictionary.trie")
+
+    if not os.path.exists(FAISS_PATH):
+        faiss_index, _ = prepare_data_and_index(EMBEDDING_MODEL)
+    else:
+        faiss_index = load_faiss(FAISS_PATH)
 
 # --- Utility ---
 def make_cache_key(prefix: str, query: str) -> str:
@@ -39,11 +57,20 @@ def define(word: str = Query(..., description="Word to look up")):
     if cached:
         return {"source": "cache", "result": cached}
 
-    # search local dictionary data
-    for item in dictionary_data:
-        if item["word"].lower() == word.lower():
-            json_set(cache_key, item)
-            return {"source": "dict", "result": item}
+    word_lower = word.lower()
+
+    if word_lower in trie:
+        entry = dictionary_data.get(word, dictionary_data.get(word_lower))
+        if entry:
+            json_set(cache_key, entry)
+            return {"source": "trie", "result":entry}
+        
+    suggestions = prefix_search(trie, word_lower[:3])
+    if suggestions:
+        return {
+            "error": "Word not found, Did you mean one of these?",
+            "suggestions": suggestions[:5]
+        }
 
     return {"error": "Word not found"}
 
@@ -75,6 +102,14 @@ def reverse_lookup(meaning: str = Query(..., description="Meaning or phrase to f
     json_set(cache_key, results)
     return {"source": "faiss", "result": results}
 
-@app.get("/")
+@app.get("/autocomplete")
+def autocomplete(prefix: str = Query(..., min_length=1)):
+    # prefix search should be case-insensitive depending on trie build
+    p = prefix.strip().lower()
+    matches = prefix_search(trie, p)
+    return {"matches": matches[:50]}
+
+@app.get("/", include_in_schema=False)
 def root():
-    return {"message": "Welcome to the Local RAG Dictionary API!"}
+    index_file = static_dir / "index.html"
+    return index_file.read_text(encoding=utf-8)

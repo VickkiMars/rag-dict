@@ -8,6 +8,7 @@ def get_model(model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
     global _model
     if _model is None:
         _model = SentenceTransformer(model_name)
+        _model.save("models/all-MiniLM-L6-v2")
     return _model
 
 def embed_texts(texts: List[str], model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
@@ -19,3 +20,6 @@ def embed_texts(texts: List[str], model_name: str = "sentence-transformers/all-M
         normalize_embeddings=False
     )
     return embs.astype("float32")
+
+if __name__ == "__main__":
+    get_model()

@@ -58,16 +58,25 @@ def load_faiss(path: str = FAISS_PATH) -> faiss.Index:
 # -----------------------------
 def prepare_data_and_index(model_name: str) -> Tuple[faiss.Index, list]:
     """
-    Loads dictionary data, embeds meanings, builds FAISS index, and saves it.
+    Loads dictionary data, embeds definitions, builds FAISS index, and saves it.
     """
-    with open(DICT_JSON, 'r', encoding='utf-8') as f:
+    with open(DICT_JSON, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    meanings = [entry["meaning"] for entry in data]            # extract all meanings
-    embeddings = embed_texts(meanings, model_name=model_name)  # embed all meanings
-    index = build_faiss_index(embeddings)                      # build FAISS index
-    save_faiss(index)                                          # save for reuse
-    return index, data
+    # Flatten entries into list form
+    entries = []
+    meanings = []
+
+    for word, info in data.items():
+        definition_text = " ".join(info.get("definitions", []))
+        meanings.append(definition_text)
+        entries.append({"word": word, **info})
+
+    embeddings = embed_texts(meanings, model_name=model_name)
+    index = build_faiss_index(embeddings)
+    save_faiss(index)
+
+    return index, entries
 
 # -----------------------------
 # 5. BM25 RERANKER

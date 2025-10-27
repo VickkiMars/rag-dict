@@ -1,0 +1,14 @@
+:root{
+  --bg:#0f1724; --card:#0b1220; --accent:#60a5fa; --muted:#94a3b8; --text:#e6eef8;
+}
+*{box-sizing:border-box}
+body{font-family:Inter, system-ui, sans-serif; background:var(--bg); color:var(--text); margin:0; padding:20px;}
+.container{max-width:900px;margin:0 auto}
+h1{margin:0 0 16px}
+.box{background:var(--card); padding:16px;border-radius:8px;margin-bottom:12px; box-shadow: 0 6px 20px rgba(2,6,23,0.6);}
+input{width:100%; padding:8px 10px; margin:8px 0; border-radius:6px; border:1px solid rgba(255,255,255,0.06); background:#071127; color:var(--text)}
+button{background:var(--accent); border:none; padding:8px 12px; border-radius:6px; color:#042038; cursor:pointer}
+.result{white-space:pre-wrap; background:#041022; padding:10px; border-radius:6px; color:var(--muted)}
+.suggestions{display:flex; gap:8px; flex-wrap:wrap; margin-top:6px}
+.suggestions button{background:transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.04); padding:6px 8px; border-radius:6px}
+footer{color:var(--muted); margin-top:12px}

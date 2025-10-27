@@ -1,20 +1,28 @@
 import marisa_trie
 import json
-from src.config import DICT_JSON
+import os
 
-def build_trie_from_json(json_path: str = DICT_JSON) -> marisa_trie.Trie:
-    """Builds a Marisa-Trie from dictionary JSON data."""
-    with open(json_path, 'r', encoding='utf-8') as f:
+def build_trie_from_json(json_path: str, trie_path: str = "data/dictionary.trie"):
+    """Builds a trie from dictionary JSON where top-level keys are words."""
+    with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    words = [entry["word"] for entry in data]
+    
+    words = list(data.keys())
     trie = marisa_trie.Trie(words)
-    trie.save(json_path.replace(".json", ".trie"))
+    trie.save(trie_path)
+    print(f"Trie built with {len(words)} entries and saved to {trie_path}")
     return trie
 
-def load_trie(trie_path: str = DICT_JSON.replace(".json", ".trie")) -> marisa_trie.Trie:
-    """Loads an existing Marisa-Trie from disk."""
+def load_trie(trie_path: str = "data/dictionary.trie"):
+    """Loads a previously saved Marisa Trie."""
     return marisa_trie.Trie().load(trie_path)
 
-def prefix_search(trie: marisa_trie.Trie, prefix: str, limit: int = 10):
-    """Returns a list of words starting with the given prefix."""
-    return trie.keys(prefix)[:limit]
+def prefix_search(trie: marisa_trie.Trie, prefix: str):
+    """Returns all dictionary words that start with a given prefix."""
+    return trie.keys(prefix)
+
+if __name__ == "__main__":
+    build_trie_from_json("/home/kami/Desktop/codebase/rag-dict/cleaned_output.json")
+    trie = load_trie()
+    matches = prefix_search(trie, "Heinz")
+    print(matches)
