@@ -1,1 +1,122 @@
-static_dir = Path(__file__).resolve().parent / "frontend"
+version: '3.8'
+
+services:
+  # --- Redis Caching Layer ---
+  redis:
+    image: redis:7.0-alpine
+    container_name: rag-redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+  # --- FastAPI Microservice ---
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile.fastapi
+    container_name: rag-fastapi
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - FAISS_PATH=/app/data/embeddings.faiss
+      - DICT_JSON=/app/data/dictionary.json
+      - PYTHONPATH=/app
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+    restart: always
+
+  # --- Airflow DB Initialization Task ---
+  airflow-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.fastapi
+    container_name: rag-airflow-init
+    environment:
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////app/data/airflow.db
+      - AIRFLOW__CORE__DAGS_FOLDER=/app/airflow_project/dags
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - PYTHONPATH=/app
+    volumes:
+      - .:/app
+    command: >
+      bash -c "airflow db init &&
+               airflow users create --username admin --password admin --firstname Anonymous --lastname Admin --role Admin --email admin@example.com || true"
+
+  # --- Airflow Orchestration Webserver ---
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.fastapi
+    container_name: rag-airflow-webserver
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////app/data/airflow.db
+      - AIRFLOW__CORE__DAGS_FOLDER=/app/airflow_project/dags
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - PYTHONPATH=/app
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - FAISS_PATH=/app/data/embeddings.faiss
+      - DICT_JSON=/app/data/dictionary.json
+    volumes:
+      - .:/app
+    depends_on:
+      - airflow-init
+    restart: always
+    command: airflow webserver --port 8080
+
+  # --- Airflow Orchestration Scheduler ---
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.fastapi
+    container_name: rag-airflow-scheduler
+    environment:
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////app/data/airflow.db
+      - AIRFLOW__CORE__DAGS_FOLDER=/app/airflow_project/dags
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - PYTHONPATH=/app
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - FAISS_PATH=/app/data/embeddings.faiss
+      - DICT_JSON=/app/data/dictionary.json
+    volumes:
+      - .:/app
+    depends_on:
+      - airflow-init
+    restart: always
+    command: airflow scheduler
+
+  # --- Prometheus Metrics Collection ---
+  prometheus:
+    image: prom/prometheus:v2.44.0
+    container_name: rag-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: always
+
+  # --- Grafana Dashboard Visualization ---
+  grafana:
+    image: grafana/grafana:10.0.0
+    container_name: rag-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    volumes:
+      - ./datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+      - ./grafana_provisioning/dashboards/dashboard_provider.yml:/etc/grafana/provisioning/dashboards/dashboard_provider.yml
+      - ./grafana_provisioning/dashboards/dashboard.json:/var/lib/grafana/dashboards/dashboard.json
+    depends_on:
+      - prometheus
+    restart: always

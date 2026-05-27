@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: 'LexiSeek Dashboards'
+    orgId: 1
+    folder: 'LexiSeek RAG'
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
