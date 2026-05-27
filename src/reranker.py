@@ -20,6 +20,8 @@ def bm25_rerank(query: str, retrieved_items: List[Dict], top_k: int = 5) -> List
 	combined_scores = 0.6 * semantic_scores + 0.4 * bm25_scores
 
 	ranked = sorted([
-		{**item,"bm25_score": float(bm25_s),"combined_scores": float(cs)}for item, bm25_s, cs in zip(retrieved_items, bm25_scores, combined_scores)],key=lambda x:x["combined_score"], reverse=True)
+		{**item, "bm25_score": float(bm25_s), "combined_score": float(cs)}
+		for item, bm25_s, cs in zip(retrieved_items, bm25_scores, combined_scores)
+	], key=lambda x: x["combined_score"], reverse=True)
 
 	return ranked[:top_k]

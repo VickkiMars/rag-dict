@@ -7,7 +7,7 @@ def build_trie_from_json(json_path: str, trie_path: str = "data/dictionary.trie"
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     
-    words = list(data.keys())
+    words = [w.lower() for w in data.keys()]
     trie = marisa_trie.Trie(words)
     trie.save(trie_path)
     print(f"Trie built with {len(words)} entries and saved to {trie_path}")
