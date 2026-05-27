@@ -1,1 +1,180 @@
-sentence-transformers/all-MiniLM-L6-v2
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LexiSeek RAG — Observable Semantic Lookup System</title>
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="LexiSeek is a privacy-focused semantic lookup dictionary supporting forward and reverse semantic queries using Sentence-BERT, FAISS, Redis, and Apache Airflow. Exposes real-time observability dashboards via Prometheus and Grafana.">
+  <meta name="keywords" content="RAG, Semantic Search, Dictionary, FastAPI, FAISS, Sentence-BERT, Redis, Airflow, Prometheus, Grafana">
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-area">
+        <span class="logo-icon">🔍</span>
+        <h1>LexiSeek <span class="gradient-text">RAG</span></h1>
+      </div>
+      <p class="subtitle">Observable Semantic Lookup & Retrieval System</p>
+      
+      <!-- System Badges -->
+      <div class="system-status">
+        <div class="status-badge active">
+          <span class="pulse-dot"></span>
+          <span>FastAPI Online</span>
+        </div>
+        <div class="status-badge active">
+          <span class="pulse-dot green"></span>
+          <span>Redis Active</span>
+        </div>
+        <div class="status-badge active">
+          <span class="pulse-dot purple"></span>
+          <span>FAISS-cpu Loaded</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="app-main">
+      <!-- Tabs Selector -->
+      <div class="tabs-container">
+        <button id="tab-forward-btn" class="tab-btn active" onclick="switchTab('forward')">
+          <span class="tab-icon">📖</span> Forward Lookup <span class="tab-sub">Word ➔ Meaning</span>
+        </button>
+        <button id="tab-reverse-btn" class="tab-btn" onclick="switchTab('reverse')">
+          <span class="tab-icon">🧠</span> Reverse Lookup <span class="tab-sub">Meaning ➔ Word</span>
+        </button>
+      </div>
+
+      <!-- Tab Content: Forward Lookup -->
+      <section id="tab-forward" class="tab-content active">
+        <div class="search-box glass-card">
+          <h2 class="section-title">Lookup word definition</h2>
+          <p class="section-desc">Search for a word directly. Auto-complete suggestions will update in real time.</p>
+          
+          <div class="search-row">
+            <div class="input-wrapper">
+              <input type="text" id="wordInput" placeholder="Type a word (e.g. apple, serendipity, retroflex)..." autocomplete="off">
+              <div id="suggestions" class="suggestions-dropdown"></div>
+            </div>
+            <button id="defineBtn" class="primary-btn">Define Word</button>
+          </div>
+        </div>
+
+        <!-- Definition Output Card -->
+        <div id="defineResultCard" class="result-card glass-card hidden">
+          <div class="result-header">
+            <h3 id="resultWord" class="result-word">Word</h3>
+            <span id="resultPos" class="pos-badge">noun</span>
+            <span id="defineLatencyBadge" class="latency-badge">--ms</span>
+          </div>
+          
+          <div id="resultPronunciationContainer" class="result-section hidden">
+            <h4 class="section-label">Pronunciation</h4>
+            <p id="resultPronunciation" class="result-text"></p>
+          </div>
+          
+          <div class="result-section">
+            <h4 class="section-label">Definitions</h4>
+            <ol id="resultDefinitions" class="definitions-list"></ol>
+          </div>
+
+          <div id="resultEtymologyContainer" class="result-section hidden">
+            <h4 class="section-label">Etymology</h4>
+            <p id="resultEtymology" class="result-text"></p>
+          </div>
+
+          <div class="result-footer">
+            <span class="source-tag">Source: <strong id="defineSource">Database</strong></span>
+          </div>
+        </div>
+
+        <div id="defineErrorCard" class="error-card glass-card hidden">
+          <p id="defineErrorMsg" class="error-msg"></p>
+          <div id="fallbackSuggestions" class="suggestions-container hidden">
+            <p class="suggestions-label">Did you mean?</p>
+            <div id="suggestionButtons" class="suggestion-buttons"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab Content: Reverse Lookup -->
+      <section id="tab-reverse" class="tab-content">
+        <div class="search-box glass-card">
+          <h2 class="section-title">Reverse semantic search</h2>
+          <p class="section-desc">Type a phrase, description, or concept. FAISS will retrieve semantically similar terms.</p>
+          
+          <div class="search-row">
+            <div class="input-wrapper">
+              <input type="text" id="meaningInput" placeholder="Describe a concept (e.g. feeling extremely happy, an astronomical event)...">
+            </div>
+            <button id="reverseBtn" class="primary-btn">Find Words</button>
+          </div>
+        </div>
+
+        <!-- Semantic Results Panel -->
+        <div id="reverseResultCard" class="reverse-results-container hidden">
+          <div class="results-meta">
+            <h4>Top Semantic Matches</h4>
+            <span id="reverseLatencyBadge" class="latency-badge">--ms</span>
+          </div>
+
+          <div id="reverseResultsList" class="results-list"></div>
+          
+          <div class="result-footer">
+            <span class="source-tag">Source: <strong id="reverseSource">FAISS Vector Store + BM25 Reranking</strong></span>
+          </div>
+        </div>
+
+        <div id="reverseErrorCard" class="error-card glass-card hidden">
+          <p id="reverseErrorMsg" class="error-msg"></p>
+        </div>
+      </section>
+    </main>
+
+    <!-- Observability Footer Section -->
+    <footer class="app-footer">
+      <div class="observability-links glass-card">
+        <h3>📊 Observability Dashboard Portal</h3>
+        <p>This system runs in a containerized environment. Click below to view live data pipelines and performance stats:</p>
+        <div class="links-row">
+          <a href="http://localhost:3000" target="_blank" class="obs-link grafana-link">
+            <span class="icon">📈</span>
+            <div class="link-text">
+              <span class="link-title">Grafana Dashboards</span>
+              <span class="link-desc">Latency percentiles & lookup rates</span>
+            </div>
+          </a>
+          <a href="http://localhost:8080" target="_blank" class="obs-link airflow-link">
+            <span class="icon">🌀</span>
+            <div class="link-text">
+              <span class="link-title">Apache Airflow</span>
+              <span class="link-desc">DAG pipeline & embedding tasks</span>
+            </div>
+          </a>
+          <a href="http://localhost:9090" target="_blank" class="obs-link prometheus-link">
+            <span class="icon">🔥</span>
+            <div class="link-text">
+              <span class="link-title">Prometheus Targets</span>
+              <span class="link-desc">Raw metrics & scraping targets</span>
+            </div>
+          </a>
+        </div>
+      </div>
+      <div class="attribution">
+        <p>LexiSeek RAG Dictionary &bull; Sentence-Transformers <code>all-MiniLM-L6-v2</code> &bull; FAISS IP Index</p>
+      </div>
+    </footer>
+  </div>
+
+  <!-- JavaScript -->
+  <script src="/static/app.js"></script>
+</body>
+</html>
