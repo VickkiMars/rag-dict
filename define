@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+import sys
+import requests
+
+def print_help():
+    print("LexiSeek RAG — Terminal Search Utility")
+    print("Usage:")
+    print("  define \"word\"      - Lookup the exact definition of a single word (Forward)")
+    print("  define \"sentence\"  - Search for semantically similar words by meaning (Reverse)")
+    print("\nExamples:")
+    print("  define serendipity")
+    print("  define \"an unexpected happy discovery\"")
+
+def main():
+    if len(sys.argv) < 2:
+        print_help()
+        sys.exit(1)
+        
+    # Join all command line arguments into a single query string
+    query = " ".join(sys.argv[1:]).strip()
+    if not query:
+        print_help()
+        sys.exit(1)
+        
+        # Check if the query is a single word or a sentence/phrase
+    # If the trimmed string contains any spaces, treat it as a semantic sentence search
+    is_sentence = len(query.split()) > 1
+    
+    base_url = "http://127.0.0.1:8000"
+    
+    try:
+        if not is_sentence:
+            # --- Forward Lookup: Word Definition ---
+            url = f"{base_url}/define?word={query}"
+            res = requests.get(url)
+            if res.status_code != 200:
+                print(f"\033[91mError: Server returned status code {res.status_code}\033[0m")
+                sys.exit(1)
+                
+            data = res.json()
+            if "error" in data:
+                print(f"\033[91m❌ {data['error']}\033[0m")
+                if "suggestions" in data and data["suggestions"]:
+                    print("\033[96m💡 Did you mean:\033[0m")
+                    for s in data["suggestions"]:
+                        print(f"  - \033[92m{s}\033[0m")
+            else:
+                entry = data["result"]
+                print(f"\033[94;1m📖 === {entry['word']} ===\033[0m")
+                if entry.get("pos"):
+                    print(f"\033[93mPart of Speech:\033[0m {', '.join(entry['pos'])}")
+                if entry.get("pronunciations"):
+                    print(f"\033[93mPronunciation:\033[0m {', '.join(entry['pronunciations'])}")
+                print(f"\033[93mDefinitions:\033[0m")
+                for i, d in enumerate(entry["definitions"], 1):
+                    print(f"  {i}. {d}")
+                if entry.get("etymology"):
+                    print(f"\033[93mEtymology:\033[0m {entry['etymology']}")
+                print(f"\033[90mSource: {data.get('source')} (API Latency: {res.elapsed.total_seconds()*1000:.1f}ms)\033[0m")
+        else:
+            # --- Reverse Lookup: Semantic Phrase Search ---
+            url = f"{base_url}/reverse?meaning={query}"
+            res = requests.get(url)
+            if res.status_code != 200:
+                print(f"\033[91mError: Server returned status code {res.status_code}\033[0m")
+                sys.exit(1)
+                
+            data = res.json()
+            if "error" in data:
+                print(f"\033[91m❌ {data['error']}\033[0m")
+            else:
+                results = data.get("result", [])
+                if not results:
+                    print("\033[91mNo semantically matching terms found.\033[0m")
+                    sys.exit(0)
+                
+                print(f"\033[95;1m🧠 === Semantic Search Results for: \"{query}\" ===\033[0m")
+                for i, match in enumerate(results, 1):
+                    word = match["word"]
+                    meaning = match["meaning"]
+                    comb_score = match.get("combined_score", 0)
+                    cos_score = match.get("score", 0)
+                    bm25_score = match.get("bm25_score", 0)
+                    pos = match.get("pos", ["definition"])
+                    
+                    pos_str = f"\033[96m({pos[0]})\033[0m" if pos else ""
+                    print(f"\033[92;1m{i}. {word}\033[0m {pos_str} \033[90m(Combined: {comb_score:.3f} | Cosine: {cos_score:.3f} | BM25: {bm25_score:.3f})\033[0m")
+                    print(f"   {meaning}")
+                    print()
+                print(f"\033[90mSource: {data.get('source')} (API Latency: {res.elapsed.total_seconds()*1000:.1f}ms)\033[0m")
+                
+    except requests.exceptions.ConnectionError:
+        print("\033[91m❌ Error: Could not connect to FastAPI server at http://127.0.0.1:8000.\033[0m")
+        print("\033[96mPlease verify that the dictionary service is active:\033[0m")
+        print("  - Host systemd:  \033[92msystemctl status rag-dict.service\033[0m")
+        print("  - Containerized: \033[92mdocker compose up -d\033[0m")
+
+if __name__ == "__main__":
+    main()
